@@ -71,7 +71,7 @@ export default function AdminProducts() {
 
     const { error } = await supabase.storage
       .from('product-images')
-      .upload(fileName, file, { upsert: true });
+      .upload(fileName, file);
 
     if (error) {
       console.error('Upload error:', error);
@@ -120,9 +120,19 @@ export default function AdminProducts() {
     };
 
     if (editingId) {
-      await supabase.from('products').update(payload).eq('id', editingId);
+      const { error } = await supabase.from('products').update(payload).eq('id', editingId);
+      if (error) {
+        console.error('Update error:', error);
+        setSaving(false);
+        return;
+      }
     } else {
-      await supabase.from('products').insert(payload);
+      const { error } = await supabase.from('products').insert(payload);
+      if (error) {
+        console.error('Insert error:', error);
+        setSaving(false);
+        return;
+      }
     }
 
     await fetchProducts();
