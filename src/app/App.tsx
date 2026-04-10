@@ -18,6 +18,14 @@ import { SavedDrawer } from './components/SavedDrawer';
 import CheckoutPage from '../pages/CheckoutPage';
 import AuthPage from '../pages/AuthPage';
 
+// Admin
+import AdminRoute from '../pages/admin/AdminRoute';
+import AdminLayout from '../pages/admin/AdminLayout';
+import AdminDashboard from '../pages/admin/AdminDashboard';
+import AdminOrders from '../pages/admin/AdminOrders';
+import AdminProducts from '../pages/admin/AdminProducts';
+import AdminSubscribers from '../pages/admin/AdminSubscribers';
+
 // ── CartItem type ────────────────────────────────────────────────────────────
 export interface CartItem {
   id: string;
@@ -145,6 +153,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Store routes */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<AuthPage />} />
           <Route
@@ -155,6 +164,21 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Admin routes */}
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="products" element={<AdminProducts />} />
+            <Route path="subscribers" element={<AdminSubscribers />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>

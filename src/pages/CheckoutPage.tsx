@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
