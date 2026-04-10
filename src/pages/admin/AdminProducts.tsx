@@ -8,7 +8,7 @@ const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Desserts', 'Vegan', 'Q
 const BADGES = ['', 'Best Seller', 'New', 'Premium'];
 
 const emptyForm = {
-  name: '', price: '', original_price: '', image: '', category: 'Cookware',
+  name: '', price: '', original_price: '', category: 'Cookware',
   badge: '', description: '', rating: '4.5', reviews: '0',
   in_stock: true, meal_category: [] as string[],
 };
@@ -23,7 +23,8 @@ export default function AdminProducts() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string>('');
+  const [imageUrl, setImageUrl] = useState<string>('');       // the final public URL stored in DB
+  const [imagePreview, setImagePreview] = useState<string>(''); // local blob or public URL for preview
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetchProducts(); }, []);
@@ -37,6 +38,7 @@ export default function AdminProducts() {
 
   const openAdd = () => {
     setForm(emptyForm);
+    setImageUrl('');
     setImagePreview('');
     setEditingId(null);
     setShowForm(true);
@@ -47,7 +49,6 @@ export default function AdminProducts() {
       name: product.name ?? '',
       price: String(product.price ?? ''),
       original_price: product.original_price ? String(product.original_price) : '',
-      image: product.image ?? '',
       category: product.category ?? 'Cookware',
       badge: product.badge ?? '',
       description: product.description ?? '',
@@ -56,6 +57,7 @@ export default function AdminProducts() {
       in_stock: product.in_stock ?? true,
       meal_category: product.meal_category ?? [],
     });
+    setImageUrl(product.image ?? '');
     setImagePreview(product.image ?? '');
     setEditingId(product.id);
     setShowForm(true);
@@ -82,8 +84,8 @@ export default function AdminProducts() {
       .getPublicUrl(fileName);
 
     const publicUrl = urlData.publicUrl;
-    setForm(p => ({ ...p, image: publicUrl }));
-    setImagePreview(publicUrl);
+    setImageUrl(publicUrl);       // store the URL that will go into the DB
+    setImagePreview(publicUrl);   // update preview to the real hosted URL
     setUploading(false);
   };
 
@@ -91,23 +93,23 @@ export default function AdminProducts() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Show local preview immediately
+    // Show local blob preview immediately while upload happens
     const localPreview = URL.createObjectURL(file);
     setImagePreview(localPreview);
 
-    // Upload to Supabase
+    // Upload to Supabase Storage
     handleImageUpload(file);
   };
 
   const handleSave = async () => {
-    if (!form.name || !form.price || !form.image) return;
+    if (!form.name || !form.price || !imageUrl) return;
     setSaving(true);
 
     const payload = {
       name: form.name,
       price: parseFloat(form.price),
       original_price: form.original_price ? parseFloat(form.original_price) : null,
-      image: form.image,
+      image: imageUrl,                          // always the Supabase Storage public URL
       category: form.category,
       badge: form.badge || null,
       description: form.description,
@@ -277,7 +279,7 @@ export default function AdminProducts() {
                   </div>
                 </div>
 
-                {/* Image upload */}
+                {/* Image upload — upload only, no URL input */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Product image *</label>
 
@@ -320,22 +322,6 @@ export default function AdminProducts() {
                     accept="image/*"
                     onChange={handleFileChange}
                     className="hidden"
-                  />
-
-                  {/* OR paste URL */}
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="flex-1 h-px bg-border" />
-                    <span className="text-xs text-muted-foreground">or paste URL</span>
-                    <div className="flex-1 h-px bg-border" />
-                  </div>
-                  <input
-                    value={form.image}
-                    onChange={e => {
-                      setForm(p => ({ ...p, image: e.target.value }));
-                      setImagePreview(e.target.value);
-                    }}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-primary transition-colors"
                   />
                 </div>
 
@@ -413,7 +399,7 @@ export default function AdminProducts() {
                   className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-secondary transition-colors">
                   Cancel
                 </button>
-                <button onClick={handleSave} disabled={saving || uploading || !form.name || !form.price || !form.image}
+                <button onClick={handleSave} disabled={saving || uploading || !form.name || !form.price || !imageUrl}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50">
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
                     : uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
