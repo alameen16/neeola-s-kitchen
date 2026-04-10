@@ -2,8 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, Menu, X, Sun, Moon, ChefHat, Heart, User, Search, LogOut, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { mealCategories } from '../../data/products';
 import { useAuth } from '../lib/AuthContext';
+
+const mealCategories = [
+  'Breakfast', 'Lunch', 'Dinner', 'Desserts', 'Vegan',
+  'Quick Meals', 'Grilling', 'Baking', 'Soups', 'Salads',
+];
 
 interface KitchenNavbarProps {
   darkMode: boolean;

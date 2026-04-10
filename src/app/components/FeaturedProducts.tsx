@@ -1,13 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Star, Heart, ShoppingCart } from 'lucide-react';
-import { products } from '../../data/products';
+import { supabase } from '../lib/supabaseClient';
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  original_price?: number;
+  rating: number;
+  reviews: number;
+  image: string;
+  badge?: string;
+  category: string;
+  meal_category: string[];
+  in_stock: boolean;
+  description?: string;
+}
 
 interface FeaturedProductsProps {
-  addToCart: (item: { id: number; name: string; price: number; image: string }) => void;
+  addToCart: (item: { id: string; name: string; price: number; image: string }) => void;
   activeMealCategory: string;
-  favorites: number[];
-  onToggleFavorite: (id: number) => void;
+  favorites: string[];
+  onToggleFavorite: (id: string) => void;
 }
 
 export function FeaturedProducts({
@@ -16,15 +31,57 @@ export function FeaturedProducts({
   favorites,
   onToggleFavorite,
 }: FeaturedProductsProps) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(6);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      const { data, error } = await supabase.from('products').select('*');
+      if (error) {
+        console.error('Error fetching products:', error);
+      } else {
+        setProducts(data || []);
+      }
+      setLoading(false);
+    };
+
+    fetchProducts();
+  }, []);
 
   const filteredProducts =
     activeMealCategory === 'All'
       ? products
-      : products.filter((p) => p.mealCategory.includes(activeMealCategory));
+      : products.filter((p) => p.meal_category?.includes(activeMealCategory));
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const hasMore = visibleCount < filteredProducts.length;
+
+  if (loading) {
+    return (
+      <section id="products" className="py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-card border border-border rounded-2xl overflow-hidden animate-pulse"
+              >
+                <div className="aspect-square bg-secondary" />
+                <div className="p-6 space-y-3">
+                  <div className="h-4 bg-secondary rounded w-1/3" />
+                  <div className="h-6 bg-secondary rounded w-2/3" />
+                  <div className="h-4 bg-secondary rounded w-full" />
+                  <div className="h-4 bg-secondary rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="products" className="py-24">
@@ -79,13 +136,12 @@ export function FeaturedProducts({
                   </div>
                 )}
 
-                {!product.inStock && (
+                {!product.in_stock && (
                   <div className="absolute top-4 left-4 z-10 px-3 py-1 bg-muted text-muted-foreground text-sm font-medium rounded-full">
                     Out of Stock
                   </div>
                 )}
 
-                {/* Heart button — updates shared favorites state in App */}
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
@@ -114,7 +170,7 @@ export function FeaturedProducts({
                 <div className="p-6">
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     <span className="text-xs text-primary font-medium">{product.category}</span>
-                    {product.mealCategory.slice(0, 2).map((mc) => (
+                    {product.meal_category?.slice(0, 2).map((mc) => (
                       <span
                         key={mc}
                         className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground"
@@ -146,9 +202,9 @@ export function FeaturedProducts({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold text-primary">£{product.price}</span>
-                      {product.originalPrice && (
+                      {product.original_price && (
                         <span className="text-sm text-muted-foreground line-through">
-                          £{product.originalPrice}
+                          £{product.original_price}
                         </span>
                       )}
                     </div>
@@ -164,7 +220,7 @@ export function FeaturedProducts({
                           image: product.image,
                         })
                       }
-                      disabled={!product.inStock}
+                      disabled={!product.in_stock}
                       className="p-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ShoppingCart className="w-5 h-5" />

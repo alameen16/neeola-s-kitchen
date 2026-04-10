@@ -7,13 +7,11 @@ import {
   ChefHat, Lock, Truck, Tag, X, CheckCircle, Loader2,
   CreditCard, Landmark, ChevronRight, MapPin, Calendar,
   User, Mail, Phone, Download, Package, Clock, Shield,
-  ArrowLeft, Repeat, Star, AlertCircle,
+  ArrowLeft, Repeat, Star, AlertCircle, Copy, Check,
 } from 'lucide-react';
 import { useAuth } from '../app/lib/AuthContext';
+import { supabase } from '../app/lib/supabaseClient';
 
-// ── Stripe setup ─────────────────────────────────────────────────────────────
-// Add VITE_STRIPE_PUBLISHABLE_KEY=pk_test_... to your .env file
-// Get it from: dashboard.stripe.com → Developers → API keys
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -21,7 +19,7 @@ export interface CartItem {
   id: string;
   name: string;
   description: string;
-  price: number; // pence
+  price: number;
   quantity: number;
   emoji: string;
   type: 'product' | 'subscription';
@@ -70,9 +68,32 @@ function calcTotals(items: CartItem[], promoDiscount: number, expressFee: number
 
 const VALID_PROMOS: Record<string, { label: string; pct: number }> = {
   WELCOME10: { label: 'Welcome discount', pct: 10 },
-  KITCHEN15: { label: 'Kitchen special',  pct: 15 },
-  SUMMER20:  { label: 'Summer offer',     pct: 20 },
+  KITCHEN15: { label: 'Kitchen special', pct: 15 },
+  SUMMER20: { label: 'Summer offer', pct: 20 },
 };
+
+// ── Bank details ─────────────────────────────────────────────────────────────
+const BANK_DETAILS = [
+  { label: 'Account name', value: "Neeola's Kitchen Ltd" },
+  { label: 'Sort code', value: '00-00-00' },
+  { label: 'Account no.', value: '00000000' },
+  { label: 'Bank', value: 'Barclays Bank' },
+];
+
+// ── Copy to clipboard button ─────────────────────────────────────────────────
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button onClick={handleCopy} className="p-1 hover:bg-secondary rounded transition-colors">
+      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-foreground/40" />}
+    </button>
+  );
+}
 
 // ── StepBar ──────────────────────────────────────────────────────────────────
 function StepBar({ current, maxReached }: { current: number; maxReached: number }) {
@@ -111,7 +132,6 @@ function AddressAutocomplete({ value, onChange, onSelect }: {
 
   const fetchSuggestions = useCallback(async (query: string) => {
     if (query.length < 3) { setSuggestions([]); setOpen(false); return; }
-    // Replace with real Google Places API call
     setSuggestions([
       { description: `${query}, Portsmouth, Hampshire, PO1 2AB`, place_id: 'mock1' },
       { description: `${query}, Southampton, Hampshire, SO14 3LP`, place_id: 'mock2' },
@@ -220,7 +240,7 @@ function downloadVATInvoice(orderId: string, delivery: DeliveryForm, items: Cart
   a.click();
 }
 
-// ── Main checkout form (must be inside <Elements>) ───────────────────────────
+// ── Main checkout form ───────────────────────────────────────────────────────
 function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -265,30 +285,82 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
     else { setPromoError('Invalid code. Try WELCOME10'); setTimeout(() => setPromoError(''), 3000); }
   };
 
+  // ── Save order to Supabase ────────────────────────────────────────────────
+  const saveOrder = async (stripePaymentId: string, status: string) => {
+    const { error } = await supabase.from('orders').insert({
+      customer_name: `${delivery.firstName} ${delivery.lastName}`,
+      customer_email: delivery.email,
+      items: cartItems.map(i => ({
+        id: i.id,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+      })),
+      total: totals.total / 100,
+      status,
+      stripe_payment_id: stripePaymentId,
+    });
+    if (error) console.error('Order save error:', error);
+  };
+
+  // ── Place order ───────────────────────────────────────────────────────────
   const placeOrder = async () => {
-    if (!stripe || !elements) return;
     setLoading(true);
     setStripeError('');
+    const id = generateOrderId();
+
     try {
-      const id = generateOrderId();
+      // ── Bank transfer flow ───────────────────────────────────────────────
+      if (payMethod === 'bank') {
+        await saveOrder('', 'pending_payment');
+        setOrderId(id);
+        setDone(true);
+        return;
+      }
 
-      // ── Connect your Supabase Edge Function here ─────────────────────────
-      // const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-      //   body: JSON.stringify({ amount: totals.total }),
-      // });
-      // const { clientSecret } = await res.json();
-      // const cardElement = elements.getElement(CardElement);
-      // const { error } = await stripe.confirmCardPayment(clientSecret, {
-      //   payment_method: { card: cardElement!, billing_details: { name: cardName, email: delivery.email } },
-      // });
-      // if (error) { setStripeError(error.message ?? 'Payment failed'); setLoading(false); return; }
-      // ─────────────────────────────────────────────────────────────────────
+      // ── Card payment flow ────────────────────────────────────────────────
+      if (!stripe || !elements) return;
 
-      await new Promise(r => setTimeout(r, 2000)); // remove once backend connected
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) {
+        setStripeError('Card details not found. Please go back to the payment step.');
+        return;
+      }
+
+      // Step 1 — Create payment intent via edge function
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ amount: totals.total }),
+        }
+      );
+
+      const { clientSecret, error: fnError } = await res.json();
+      if (fnError) throw new Error(fnError);
+
+      // Step 2 — Confirm card payment
+      const { error: stripeErr, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: { name: cardName, email: delivery.email },
+        },
+      });
+
+      if (stripeErr) {
+        setStripeError(stripeErr.message ?? 'Payment failed');
+        return;
+      }
+
+      // Step 3 — Save order to Supabase
+      await saveOrder(paymentIntent?.id ?? '', 'pending');
       setOrderId(id);
       setDone(true);
+
     } catch (err: any) {
       setStripeError(err.message ?? 'Something went wrong.');
     } finally {
@@ -305,21 +377,60 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
           className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 border-2 border-green-500 flex items-center justify-center mx-auto mb-6">
           <CheckCircle className="w-10 h-10 text-green-500" />
         </motion.div>
-        <h2 className="text-2xl font-bold mb-2">Order confirmed!</h2>
+        <h2 className="text-2xl font-bold mb-2">Order placed!</h2>
+
+        {/* Bank transfer pending notice */}
+        {payMethod === 'bank' && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-4 text-left">
+            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2">⚠️ Payment pending</p>
+            <p className="text-xs text-amber-600 dark:text-amber-500 mb-3">
+              Your order is reserved. Please transfer <strong>{fmt(totals.total)}</strong> to the account below using your order reference as the payment reference.
+            </p>
+            <div className="space-y-2">
+              {BANK_DETAILS.map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-xs text-amber-600 dark:text-amber-500">{label}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400">{value}</span>
+                    <CopyButton text={value} />
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-amber-200 dark:border-amber-800 pt-2 mt-2">
+                <span className="text-xs text-amber-600 dark:text-amber-500">Payment reference</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400">{orderId}</span>
+                  <CopyButton text={orderId} />
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px] text-amber-500 mt-3">Order confirmed once payment received (1–2 business days).</p>
+          </div>
+        )}
+
         <p className="text-foreground/60 text-sm mb-6">
-          Confirmation sent to <strong>{delivery.email}</strong>. Arrives{' '}
-          <strong>{new Date(delivery.deliveryDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>.
+          Confirmation sent to <strong>{delivery.email}</strong>.{' '}
+          {payMethod === 'card' && <>Arrives <strong>{new Date(delivery.deliveryDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>.</>}
         </p>
+
         <div className="bg-secondary rounded-xl p-4 mb-6 text-left space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-foreground/60">Order reference</span>
-            <span className="font-mono font-bold">{orderId}</span>
+            <div className="flex items-center gap-1">
+              <span className="font-mono font-bold">{orderId}</span>
+              <CopyButton text={orderId} />
+            </div>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-foreground/60">Total charged</span>
+            <span className="text-foreground/60">Total {payMethod === 'bank' ? 'to transfer' : 'charged'}</span>
             <span className="font-bold">{fmt(totals.total)}</span>
           </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-foreground/60">Payment method</span>
+            <span className="font-medium">{payMethod === 'card' ? 'Card' : 'Bank transfer'}</span>
+          </div>
         </div>
+
         <div className="flex gap-3">
           <button onClick={() => downloadVATInvoice(orderId, delivery, cartItems, totals)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-secondary transition-colors">
@@ -339,7 +450,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
 
-        {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between mb-10 pb-6 border-b border-border">
           <div className="flex items-center gap-3">
@@ -358,7 +468,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
           </div>
         </motion.div>
 
-        {/* Logged-in user banner */}
         {user && (
           <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-2 mb-6 px-4 py-3 bg-primary/5 border border-primary/20 rounded-xl text-sm">
@@ -372,8 +481,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-
-          {/* ── Left: Steps ── */}
           <div className="lg:col-span-3">
             <StepBar current={step} maxReached={maxReached} />
             <AnimatePresence mode="wait">
@@ -383,7 +490,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                 <motion.div key="step1" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
                   className="bg-background border border-border rounded-xl p-6 shadow-sm space-y-5">
                   <h2 className="text-xl font-bold">Delivery details</h2>
-
                   <div className="grid grid-cols-2 gap-4">
                     {(['firstName', 'lastName'] as const).map((k, i) => (
                       <div key={k} className="space-y-1.5">
@@ -396,7 +502,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                       </div>
                     ))}
                   </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold tracking-wide uppercase text-foreground/60">Email</label>
                     <div className="relative">
@@ -406,7 +511,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                     </div>
                     <p className="text-[11px] text-foreground/50 flex items-center gap-1"><Mail className="w-3 h-3" /> Confirmation sent here</p>
                   </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold tracking-wide uppercase text-foreground/60">Phone</label>
                     <div className="relative">
@@ -415,13 +519,11 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                         className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:border-primary transition-colors" />
                     </div>
                   </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold tracking-wide uppercase text-foreground/60">Street address</label>
                     <AddressAutocomplete value={delivery.line1} onChange={v => setField('line1')(v)}
                       onSelect={parts => setDelivery(p => ({ ...p, ...parts }))} />
                   </div>
-
                   <div className="grid grid-cols-3 gap-3">
                     {(['city', 'county', 'postcode'] as const).map(k => (
                       <div key={k} className="space-y-1.5">
@@ -431,8 +533,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                       </div>
                     ))}
                   </div>
-
-                  {/* Delivery date */}
                   <div className="space-y-2">
                     <label className="text-xs font-semibold tracking-wide uppercase text-foreground/60">Delivery date</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -451,7 +551,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                       ))}
                     </div>
                   </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold tracking-wide uppercase text-foreground/60">
                       Delivery notes <span className="normal-case font-normal text-foreground/40">(optional)</span>
@@ -460,7 +559,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                       placeholder="Leave at door, ring bell…"
                       className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:border-primary transition-colors resize-none" />
                   </div>
-
                   <button onClick={() => goStep(2)}
                     disabled={!delivery.firstName || !delivery.email || !delivery.line1 || !delivery.postcode || !delivery.deliveryDate}
                     className="w-full py-3 bg-primary text-white rounded-lg font-semibold text-sm hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -475,7 +573,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                   className="bg-background border border-border rounded-xl p-6 shadow-sm space-y-5">
                   <h2 className="text-xl font-bold">Payment</h2>
                   <SubscriptionSummary items={cartItems} />
-
                   <div className="flex gap-3">
                     {(['card', 'bank'] as const).map(m => (
                       <button key={m} onClick={() => setPayMethod(m)}
@@ -494,14 +591,11 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                           <div key={b} className="px-2.5 py-1 border border-border rounded text-[10px] font-bold text-foreground/50">{b}</div>
                         ))}
                       </div>
-
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold tracking-wide uppercase text-foreground/60">Name on card</label>
                         <input value={cardName} onChange={e => setCardName(e.target.value)}
                           className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:border-primary transition-colors" />
                       </div>
-
-                      {/* ── Real Stripe CardElement ── */}
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold tracking-wide uppercase text-foreground/60">Card details</label>
                         <div className="px-3 py-3 rounded-lg border border-border bg-background focus-within:border-primary transition-colors">
@@ -514,16 +608,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                           }} />
                         </div>
                       </div>
-
-                      <AnimatePresence>
-                        {stripeError && (
-                          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            className="flex items-center gap-1.5 text-sm text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">
-                            <AlertCircle className="w-4 h-4 shrink-0" /> {stripeError}
-                          </motion.p>
-                        )}
-                      </AnimatePresence>
-
                       <p className="flex items-center gap-1.5 text-xs text-foreground/50">
                         <Lock className="w-3 h-3" /> Secured by Stripe · 256-bit SSL · PCI DSS compliant
                       </p>
@@ -531,19 +615,39 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                   )}
 
                   {payMethod === 'bank' && (
-                    <div className="bg-secondary rounded-xl p-4 space-y-2 text-sm">
-                      <p className="font-semibold mb-3">Bank transfer details</p>
-                      {[["Account name", "Neeola's Kitchen Ltd"], ['Sort code', '00-00-00'], ['Account no.', '00000000']].map(([k, v]) => (
-                        <div key={k} className="flex justify-between">
-                          <span className="text-foreground/60">{k}</span>
-                          <span className="font-mono font-semibold">{v}</span>
-                        </div>
-                      ))}
-                      <p className="text-xs text-foreground/50 mt-3 pt-3 border-t border-border">
-                        Orders are processed once payment clears (1–2 business days).
-                      </p>
+                    <div className="space-y-3">
+                      <div className="bg-secondary rounded-xl p-4 space-y-3">
+                        <p className="text-sm font-semibold">Bank transfer details</p>
+                        {BANK_DETAILS.map(({ label, value }) => (
+                          <div key={label} className="flex items-center justify-between">
+                            <span className="text-sm text-foreground/60">{label}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-semibold text-sm">{value}</span>
+                              <CopyButton text={value} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                        <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold mb-1">How it works</p>
+                        <ol className="text-xs text-amber-600 dark:text-amber-500 space-y-1 list-decimal list-inside">
+                          <li>Click "Place order" to reserve your items</li>
+                          <li>Transfer the exact amount to the account above</li>
+                          <li>Use your order reference as the payment reference</li>
+                          <li>Your order ships once payment is received (1–2 business days)</li>
+                        </ol>
+                      </div>
                     </div>
                   )}
+
+                  <AnimatePresence>
+                    {stripeError && (
+                      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="flex items-center gap-1.5 text-sm text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">
+                        <AlertCircle className="w-4 h-4 shrink-0" /> {stripeError}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
 
                   <div className="flex gap-3 pt-2">
                     <button onClick={() => goStep(1)} className="px-4 py-3 rounded-lg border border-border text-sm font-medium hover:bg-secondary transition-colors">Back</button>
@@ -575,6 +679,14 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                     )}
                   </div>
 
+                  {/* Payment method summary */}
+                  <div className="flex items-center gap-2 px-4 py-3 bg-secondary rounded-xl text-sm">
+                    {payMethod === 'card'
+                      ? <><CreditCard className="w-4 h-4 text-primary" /><span>Paying by <strong>card</strong></span></>
+                      : <><Landmark className="w-4 h-4 text-amber-500" /><span>Paying by <strong>bank transfer</strong> — order reserved on placement</span></>
+                    }
+                  </div>
+
                   <div className="space-y-2">
                     <p className="text-xs font-semibold tracking-wide uppercase text-foreground/50">Items</p>
                     {cartItems.map(item => (
@@ -603,6 +715,13 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                     </div>
                   </div>
 
+                  {/* Hidden CardElement to keep Stripe reference alive on step 3 */}
+                  {payMethod === 'card' && (
+                    <div className="hidden">
+                      <CardElement />
+                    </div>
+                  )}
+
                   <AnimatePresence>
                     {stripeError && (
                       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -614,9 +733,14 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
 
                   <div className="flex gap-3 pt-2">
                     <button onClick={() => goStep(2)} className="px-4 py-3 rounded-lg border border-border text-sm font-medium hover:bg-secondary transition-colors">Back</button>
-                    <button onClick={placeOrder} disabled={loading || !stripe}
+                    <button onClick={placeOrder} disabled={loading || (payMethod === 'card' && !stripe)}
                       className="flex-1 py-3 bg-primary text-white rounded-lg font-semibold text-sm hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-70">
-                      {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Placing order…</> : <><Lock className="w-4 h-4" /> Place order · {fmt(totals.total)}</>}
+                      {loading
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Placing order…</>
+                        : payMethod === 'card'
+                          ? <><Lock className="w-4 h-4" /> Place order · {fmt(totals.total)}</>
+                          : <><Landmark className="w-4 h-4" /> Reserve order · {fmt(totals.total)}</>
+                      }
                     </button>
                   </div>
                 </motion.div>
@@ -629,12 +753,10 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
           <div className="lg:col-span-2">
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="sticky top-8 bg-background border border-border rounded-xl p-5 shadow-sm space-y-4">
-
               <h3 className="font-bold text-sm flex items-center gap-2">
                 <Package className="w-4 h-4 text-foreground/50" />
                 Your order ({cartItems.length} item{cartItems.length !== 1 ? 's' : ''})
               </h3>
-
               <div className="space-y-3">
                 {cartItems.map(item => (
                   <div key={item.id} className="flex gap-3">
@@ -650,8 +772,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                   </div>
                 ))}
               </div>
-
-              {/* Promo */}
               <div className="border-t border-border pt-4">
                 {promoCode ? (
                   <div className="flex items-center justify-between text-sm">
@@ -678,8 +798,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                   )}
                 </AnimatePresence>
               </div>
-
-              {/* Totals */}
               <div className="border-t border-border pt-4 space-y-2 text-sm">
                 <div className="flex justify-between text-foreground/60"><span>Subtotal</span><span>{fmt(totals.sub)}</span></div>
                 <div className={`flex justify-between ${totals.ship === 0 ? 'text-green-600' : 'text-foreground/60'}`}>
@@ -691,8 +809,6 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
                 <div className="flex justify-between font-bold text-base pt-2 border-t border-border"><span>Total</span><span>{fmt(totals.total)}</span></div>
                 <p className="text-[11px] text-foreground/40">Includes VAT · Free shipping on orders over £50</p>
               </div>
-
-              {/* Trust badges */}
               <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border">
                 {[[<Lock className="w-3 h-3" />, 'SSL secure'], [<Shield className="w-3 h-3" />, 'Stripe PCI'], [<Truck className="w-3 h-3" />, 'Free >£50']].map(([icon, label], i) => (
                   <div key={i} className="flex items-center gap-1 text-[11px] text-foreground/40">{icon as React.ReactNode} {label as string}</div>
@@ -700,14 +816,13 @@ function CheckoutForm({ cartItems }: { cartItems: CartItem[] }) {
               </div>
             </motion.div>
           </div>
-
         </div>
       </div>
     </div>
   );
 }
 
-// ── Root export — wraps in Stripe Elements provider ──────────────────────────
+// ── Root export ──────────────────────────────────────────────────────────────
 export default function CheckoutPage() {
   const location = useLocation();
   const cartItems: CartItem[] = (location.state as { cartItems?: CartItem[] })?.cartItems ?? [];

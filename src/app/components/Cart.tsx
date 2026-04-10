@@ -18,8 +18,8 @@ interface CartProps {
   isOpen: boolean;
   onClose: () => void;
   items: CartItem[];
-  updateQuantity: (id: number, quantity: number) => void;
-  removeFromCart: (id: number) => void;
+  updateQuantity: (id: string, quantity: number) => void;
+  removeFromCart: (id: string) => void;
   checkoutItems: CheckoutCartItem[];
 }
 
@@ -36,7 +36,6 @@ export function Cart({
 
   const handleCheckout = () => {
     onClose();
-    // Pass cart items to checkout page via router state
     navigate('/checkout', { state: { cartItems: checkoutItems } });
   };
 
@@ -109,7 +108,7 @@ export function Cart({
 
                       <div className="flex-1 min-w-0">
                         <h3 className="font-bold mb-1 truncate">{item.name}</h3>
-                        <p className="text-primary font-bold mb-2">${item.price}</p>
+                        <p className="text-primary font-bold mb-2">£{item.price}</p>
 
                         <div className="flex items-center gap-2">
                           <motion.button
@@ -152,7 +151,7 @@ export function Cart({
               <div className="border-t border-border p-6 space-y-4">
                 <div className="flex items-center justify-between text-lg">
                   <span className="font-medium">Subtotal</span>
-                  <span className="font-bold">${total.toFixed(2)}</span>
+                  <span className="font-bold">£{total.toFixed(2)}</span>
                 </div>
 
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -162,7 +161,7 @@ export function Cart({
 
                 <div className="flex items-center justify-between text-xl font-bold pt-4 border-t border-border">
                   <span>Total</span>
-                  <span className="text-primary">${total.toFixed(2)}</span>
+                  <span className="text-primary">£{total.toFixed(2)}</span>
                 </div>
 
                 <motion.button

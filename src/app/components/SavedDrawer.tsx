@@ -1,13 +1,25 @@
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Heart, ShoppingCart } from 'lucide-react';
-import { products } from '../../data/products';
+import { supabase } from '../lib/supabaseClient';
+import { CartItem } from '../App';
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  original_price?: number;
+  image: string;
+  category: string;
+  in_stock: boolean;
+}
 
 interface SavedDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  savedIds: number[];
-  addToCart: (item: { id: number; name: string; price: number; image: string }) => void;
-  onToggleFavorite: (id: number) => void;
+  savedIds: string[];
+  addToCart: (item: Omit<CartItem, 'quantity'>) => void;
+  onToggleFavorite: (id: string) => void;
 }
 
 export function SavedDrawer({
@@ -17,13 +29,27 @@ export function SavedDrawer({
   addToCart,
   onToggleFavorite,
 }: SavedDrawerProps) {
-  const savedProducts = products.filter((p) => savedIds.includes(p.id));
+  const [savedProducts, setSavedProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    if (savedIds.length === 0) {
+      setSavedProducts([]);
+      return;
+    }
+    const fetchSaved = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, price, original_price, image, category, in_stock')
+        .in('id', savedIds);
+      if (!error) setSavedProducts(data || []);
+    };
+    fetchSaved();
+  }, [savedIds]);
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -32,7 +58,6 @@ export function SavedDrawer({
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
           />
 
-          {/* Drawer */}
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -40,7 +65,6 @@ export function SavedDrawer({
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
             className="fixed top-0 right-0 h-full w-full max-w-md bg-background border-l border-border shadow-2xl z-50 flex flex-col"
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
                 <Heart className="w-5 h-5 fill-red-500 text-red-500" />
@@ -59,7 +83,6 @@ export function SavedDrawer({
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {savedProducts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-20">
@@ -84,7 +107,6 @@ export function SavedDrawer({
                       exit={{ opacity: 0, x: 40 }}
                       className="flex gap-4 p-3 bg-card border border-border rounded-2xl"
                     >
-                      {/* Image */}
                       <div className="w-20 h-20 rounded-xl overflow-hidden bg-secondary shrink-0">
                         <img
                           src={product.image}
@@ -93,23 +115,20 @@ export function SavedDrawer({
                         />
                       </div>
 
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-primary mb-0.5">{product.category}</p>
                         <p className="font-semibold text-sm leading-tight line-clamp-2">
                           {product.name}
                         </p>
                         <p className="text-primary font-bold mt-1">£{product.price}</p>
-                        {product.originalPrice && (
+                        {product.original_price && (
                           <p className="text-xs text-muted-foreground line-through">
-                            £{product.originalPrice}
+                            £{product.original_price}
                           </p>
                         )}
                       </div>
 
-                      {/* Actions */}
                       <div className="flex flex-col items-center gap-2 shrink-0">
-                        {/* Remove from saved */}
                         <button
                           onClick={() => onToggleFavorite(product.id)}
                           className="p-1.5 hover:bg-secondary rounded-lg transition-colors"
@@ -118,7 +137,6 @@ export function SavedDrawer({
                           <Heart className="w-4 h-4 fill-red-500 text-red-500" />
                         </button>
 
-                        {/* Add to cart */}
                         <button
                           onClick={() =>
                             addToCart({
@@ -128,7 +146,7 @@ export function SavedDrawer({
                               image: product.image,
                             })
                           }
-                          disabled={!product.inStock}
+                          disabled={!product.in_stock}
                           className="p-1.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           aria-label="Add to cart"
                         >

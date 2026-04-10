@@ -20,7 +20,7 @@ import AuthPage from '../pages/AuthPage';
 
 // ── CartItem type ────────────────────────────────────────────────────────────
 export interface CartItem {
-  id: number;
+  id: string;
   name: string;
   price: number;
   image: string;
@@ -35,7 +35,7 @@ function Home() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeMealCategory, setActiveMealCategory] = useState('All');
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [isSavedOpen, setIsSavedOpen] = useState(false);
 
   useEffect(() => {
@@ -64,25 +64,25 @@ function Home() {
     setIsCartOpen(true);
   };
 
-  const removeFromCart = (id: number) => {
+  const removeFromCart = (id: string) => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const updateQuantity = (id: number, quantity: number) => {
+  const updateQuantity = (id: string, quantity: number) => {
     if (quantity === 0) { removeFromCart(id); return; }
     setCartItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, quantity } : item))
     );
   };
 
-  const toggleFavorite = (id: number) => {
+  const toggleFavorite = (id: string) => {
     setFavorites((prev) =>
       prev.includes(id) ? prev.filter((fav) => fav !== id) : [...prev, id]
     );
   };
 
   const checkoutItems = cartItems.map((item) => ({
-    id: String(item.id),
+    id: item.id,
     name: item.name,
     description: '',
     price: Math.round(item.price * 100),
@@ -147,7 +147,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<AuthPage />} />
-          {/* Checkout is protected — must be logged in to access */}
           <Route
             path="/checkout"
             element={
