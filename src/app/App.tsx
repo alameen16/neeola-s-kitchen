@@ -13,6 +13,7 @@ import { Newsletter } from './components/Newsletter';
 import { KitchenFooter } from './components/KitchenFooter';
 import { Cart } from './components/Cart';
 import { SavedDrawer } from './components/SavedDrawer';
+import { OrdersDrawer } from './components/OrdersDrawer'; // ✅ ONE import, here
 
 // Pages
 import CheckoutPage from '../pages/CheckoutPage';
@@ -25,8 +26,9 @@ import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminOrders from '../pages/admin/AdminOrders';
 import AdminProducts from '../pages/admin/AdminProducts';
 import AdminSubscribers from '../pages/admin/AdminSubscribers';
+import AdminLoginPage from '../pages/admin/AdminLoginPage';
 
-// ── CartItem type ────────────────────────────────────────────────────────────
+// ── CartItem type ─────────────────────────────────────────────────────────────
 export interface CartItem {
   id: string;
   name: string;
@@ -37,7 +39,7 @@ export interface CartItem {
   billingCycle?: 'weekly' | 'monthly';
 }
 
-// ── Home ─────────────────────────────────────────────────────────────────────
+// ── Home ──────────────────────────────────────────────────────────────────────
 function Home() {
   const [darkMode, setDarkMode] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -45,6 +47,7 @@ function Home() {
   const [activeMealCategory, setActiveMealCategory] = useState('All');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isSavedOpen, setIsSavedOpen] = useState(false);
+  const [isOrdersOpen, setIsOrdersOpen] = useState(false); // ✅ Added
 
   useEffect(() => {
     const isDark = localStorage.getItem('darkMode') === 'true';
@@ -109,6 +112,7 @@ function Home() {
         onCartClick={() => setIsCartOpen(true)}
         savedCount={favorites.length}
         onSavedClick={() => setIsSavedOpen(true)}
+        onOrdersClick={() => setIsOrdersOpen(true)} // ✅ Added
         activeMealCategory={activeMealCategory}
         setActiveMealCategory={(cat) => {
           setActiveMealCategory(cat);
@@ -143,19 +147,25 @@ function Home() {
         addToCart={addToCart}
         onToggleFavorite={toggleFavorite}
       />
+
+      {/* ✅ OrdersDrawer added */}
+      <OrdersDrawer
+        isOpen={isOrdersOpen}
+        onClose={() => setIsOrdersOpen(false)}
+      />
     </div>
   );
 }
 
-// ── Root App ─────────────────────────────────────────────────────────────────
+// ── Root App ──────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Store routes */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<AuthPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} /> {/* ✅ Added */}
           <Route
             path="/checkout"
             element={
@@ -164,8 +174,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
-          {/* Admin routes */}
           <Route
             path="/admin"
             element={

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Menu, X, Sun, Moon, ChefHat, Heart, User, Search, LogOut, Settings } from 'lucide-react';
+import { ShoppingCart, Menu, X, Sun, Moon, ChefHat, Heart, User, Search, LogOut, Settings, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
 
@@ -16,6 +16,7 @@ interface KitchenNavbarProps {
   onCartClick: () => void;
   savedCount: number;
   onSavedClick: () => void;
+  onOrdersClick: () => void;
   activeMealCategory: string;
   setActiveMealCategory: (category: string) => void;
 }
@@ -39,6 +40,7 @@ export function KitchenNavbar({
   onCartClick,
   savedCount,
   onSavedClick,
+  onOrdersClick,
   activeMealCategory,
   setActiveMealCategory,
 }: KitchenNavbarProps) {
@@ -145,18 +147,11 @@ export function KitchenNavbar({
               className="hidden md:flex flex-col items-center gap-0.5 p-2 hover:bg-secondary rounded-lg transition-colors relative"
               aria-label="Saved items"
             >
-              <Heart
-                className={`w-5 h-5 transition-colors ${
-                  savedCount > 0 ? 'fill-red-500 text-red-500' : ''
-                }`}
-              />
+              <Heart className={`w-5 h-5 transition-colors ${savedCount > 0 ? 'fill-red-500 text-red-500' : ''}`} />
               <span className="text-[10px] text-foreground/60">Saved</span>
               {savedCount > 0 && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-1 -right-1 bg-primary text-white text-xs w-4 h-4 flex items-center justify-center rounded-full"
-                >
+                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+                  className="absolute -top-1 -right-1 bg-primary text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
                   {savedCount}
                 </motion.span>
               )}
@@ -174,11 +169,8 @@ export function KitchenNavbar({
               <ShoppingCart className="w-5 h-5" />
               <span className="hidden md:block text-[10px] text-foreground/60">Cart</span>
               {cartCount > 0 && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-1 -right-1 bg-primary text-white text-xs w-5 h-5 flex items-center justify-center rounded-full"
-                >
+                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+                  className="absolute -top-1 -right-1 bg-primary text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
                   {cartCount}
                 </motion.span>
               )}
@@ -226,6 +218,13 @@ export function KitchenNavbar({
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     </div>
                     <div className="p-1">
+                      {/* My Orders */}
+                      <button
+                        onClick={() => { setProfileOpen(false); onOrdersClick(); }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors"
+                      >
+                        <Package className="w-4 h-4" /> My Orders
+                      </button>
                       <button
                         onClick={() => { setProfileOpen(false); navigate('/account'); }}
                         className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-secondary transition-colors"
@@ -269,22 +268,14 @@ export function KitchenNavbar({
       </div>
 
       {/* ── Layer 2: Nav Links ── */}
-      <div
-        className={`hidden md:block border-t border-border transition-all duration-300 ${
-          scrolled ? 'bg-background/95 backdrop-blur-md' : 'bg-transparent'
-        }`}
-      >
+      <div className={`hidden md:block border-t border-border transition-all duration-300 ${scrolled ? 'bg-background/95 backdrop-blur-md' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-1">
             {navLinks.map((link, index) => (
-              <motion.a
-                key={link.name}
-                href={link.href}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
+              <motion.a key={link.name} href={link.href}
+                initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 * index }}
-                className="text-sm text-foreground/70 hover:text-primary transition-colors px-4 py-3 relative group whitespace-nowrap"
-              >
+                className="text-sm text-foreground/70 hover:text-primary transition-colors px-4 py-3 relative group whitespace-nowrap">
                 {link.name}
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-300" />
               </motion.a>
@@ -294,26 +285,16 @@ export function KitchenNavbar({
       </div>
 
       {/* ── Layer 3: Meal Category Strip ── */}
-      <div
-        className={`hidden md:block border-t border-border transition-all duration-300 ${
-          scrolled ? 'bg-background/95 backdrop-blur-md' : 'bg-transparent'
-        }`}
-      >
+      <div className={`hidden md:block border-t border-border transition-all duration-300 ${scrolled ? 'bg-background/95 backdrop-blur-md' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 py-2.5 overflow-x-auto scrollbar-hide">
             {categoryStrip.map((cat, index) => (
-              <motion.button
-                key={cat}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
+              <motion.button key={cat} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.04 * index }}
                 onClick={() => setActiveMealCategory(cat)}
                 className={`text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-all duration-200 ${
-                  activeMealCategory === cat
-                    ? 'bg-primary text-white'
-                    : 'bg-secondary text-foreground/60 hover:text-foreground hover:bg-secondary/80'
-                }`}
-              >
+                  activeMealCategory === cat ? 'bg-primary text-white' : 'bg-secondary text-foreground/60 hover:text-foreground hover:bg-secondary/80'
+                }`}>
                 {cat}
               </motion.button>
             ))}
@@ -324,29 +305,18 @@ export function KitchenNavbar({
       {/* ── Mobile Menu ── */}
       <AnimatePresence>
         {mobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-background/95 backdrop-blur-md border-t border-border"
-          >
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="md:hidden bg-background/95 backdrop-blur-md border-t border-border">
             <div className="px-4 py-4 space-y-1">
               <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg border border-border bg-secondary">
                 <Search className="w-4 h-4 text-foreground/40 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search recipes, ingredients..."
-                  className="bg-transparent text-sm text-foreground placeholder:text-foreground/40 outline-none w-full"
-                />
+                <input type="text" placeholder="Search recipes, ingredients..."
+                  className="bg-transparent text-sm text-foreground placeholder:text-foreground/40 outline-none w-full" />
               </div>
 
               {navLinks.map((link) => (
-                <a
-                  key={link.name}
-                  href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 px-2 text-foreground/70 hover:text-primary transition-colors rounded-md hover:bg-secondary"
-                >
+                <a key={link.name} href={link.href} onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 px-2 text-foreground/70 hover:text-primary transition-colors rounded-md hover:bg-secondary">
                   {link.name}
                 </a>
               ))}
@@ -355,41 +325,33 @@ export function KitchenNavbar({
                 <p className="text-xs text-foreground/40 mb-2 px-2">Meal Categories</p>
                 <div className="flex flex-wrap gap-2">
                   {categoryStrip.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => { setActiveMealCategory(cat); setMobileMenuOpen(false); }}
-                      className={`text-xs px-3 py-1.5 rounded-full transition-all duration-200 ${
-                        activeMealCategory === cat
-                          ? 'bg-primary text-white'
-                          : 'bg-secondary text-foreground/60'
-                      }`}
-                    >
+                    <button key={cat} onClick={() => { setActiveMealCategory(cat); setMobileMenuOpen(false); }}
+                      className={`text-xs px-3 py-1.5 rounded-full transition-all duration-200 ${activeMealCategory === cat ? 'bg-primary text-white' : 'bg-secondary text-foreground/60'}`}>
                       {cat}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-border flex items-center gap-4 px-2">
-                <button
-                  onClick={() => { setMobileMenuOpen(false); onSavedClick(); }}
-                  className="flex items-center gap-1.5 text-sm text-foreground/70 hover:text-primary transition-colors"
-                >
+              <div className="pt-3 border-t border-border flex flex-wrap items-center gap-4 px-2">
+                <button onClick={() => { setMobileMenuOpen(false); onSavedClick(); }}
+                  className="flex items-center gap-1.5 text-sm text-foreground/70 hover:text-primary transition-colors">
                   <Heart className={`w-4 h-4 ${savedCount > 0 ? 'fill-red-500 text-red-500' : ''}`} />
                   Saved {savedCount > 0 && `(${savedCount})`}
                 </button>
-                <button
-                  onClick={() => { setMobileMenuOpen(false); handleAccountClick(); }}
-                  className="flex items-center gap-1.5 text-sm text-foreground/70 hover:text-primary transition-colors"
-                >
+                {user && (
+                  <button onClick={() => { setMobileMenuOpen(false); onOrdersClick(); }}
+                    className="flex items-center gap-1.5 text-sm text-foreground/70 hover:text-primary transition-colors">
+                    <Package className="w-4 h-4" /> My Orders
+                  </button>
+                )}
+                <button onClick={() => { setMobileMenuOpen(false); handleAccountClick(); }}
+                  className="flex items-center gap-1.5 text-sm text-foreground/70 hover:text-primary transition-colors">
                   <User className="w-4 h-4" />
                   {user ? (user.user_metadata?.full_name ?? 'Account') : 'Sign In'}
                 </button>
                 {user && (
-                  <button
-                    onClick={handleSignOut}
-                    className="flex items-center gap-1.5 text-sm text-red-500"
-                  >
+                  <button onClick={handleSignOut} className="flex items-center gap-1.5 text-sm text-red-500">
                     <LogOut className="w-4 h-4" /> Sign Out
                   </button>
                 )}
